@@ -104,6 +104,17 @@
       if (it.detail) card.appendChild(el('div', 'sub', it.detail));
       if (it.price) card.appendChild(el('div', 'price', it.price));
       var row = el('div', 'item-actions');
+      var heart = el('button', 'item-btn heart-btn' + (it.top ? ' on' : ''));
+      heart.innerHTML = (it.top
+        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5C7 16.5 3.5 13.3 3.5 9.6A4.6 4.6 0 0 1 8.1 5c1.6 0 3 .8 3.9 2A4.4 4.4 0 0 1 15.9 5a4.6 4.6 0 0 1 4.6 4.6c0 3.7-3.5 6.9-8.5 10.9Z"/></svg> '
+        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5C7 16.5 3.5 13.3 3.5 9.6A4.6 4.6 0 0 1 8.1 5c1.6 0 3 .8 3.9 2A4.4 4.4 0 0 1 15.9 5a4.6 4.6 0 0 1 4.6 4.6c0 3.7-3.5 6.9-8.5 10.9Z"/></svg> ')
+        + (it.top ? 'ברשימת הרצויים' : 'הוספה לרצויים ביותר');
+      heart.addEventListener('click', function () {
+        it.top = !it.top;
+        if (!it.top) delete it.top;
+        save(items);
+      });
+      row.appendChild(heart);
       var del = el('button', 'item-btn', 'מחיקה');
       del.addEventListener('click', function () {
         if (!confirm('למחוק את "' + it.name + '"?')) return;

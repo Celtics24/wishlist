@@ -20,6 +20,8 @@
         home: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>',
         gift: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8"/><path d="M12 8v13"/><path d="M12 8c-1.5 0-4.5.2-4.5-2A1.9 1.9 0 0 1 9.5 4C11 4 12 6 12 8Z"/><path d="M12 8c1.5 0 4.5.2 4.5-2A1.9 1.9 0 0 0 14.5 4C13 4 12 6 12 8Z"/></svg>',
         tag: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 3H20a1 1 0 0 1 1 1v7.5a2 2 0 0 1-.6 1.4l-8.5 8.5a2 2 0 0 1-2.8 0l-5.5-5.5a2 2 0 0 1 0-2.8l8.5-8.5A2 2 0 0 1 12.5 3Z"/><circle cx="16" cy="8" r="1.4"/></svg>',
+        heart: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5C7 16.5 3.5 13.3 3.5 9.6A4.6 4.6 0 0 1 8.1 5c1.6 0 3 .8 3.9 2A4.4 4.4 0 0 1 15.9 5a4.6 4.6 0 0 1 4.6 4.6c0 3.7-3.5 6.9-8.5 10.9Z"/></svg>',
+        heartFill: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5C7 16.5 3.5 13.3 3.5 9.6A4.6 4.6 0 0 1 8.1 5c1.6 0 3 .8 3.9 2A4.4 4.4 0 0 1 15.9 5a4.6 4.6 0 0 1 4.6 4.6c0 3.7-3.5 6.9-8.5 10.9Z"/></svg>',
         bag: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 12.1a2 2 0 0 1-2 1.9H8.2a2 2 0 0 1-2-1.9L5 8Z"/><path d="M8.5 10V6.5a3.5 3.5 0 0 1 7 0V10"/></svg>',
     };
 
@@ -39,6 +41,7 @@
         var items_ = [
             { to: '#/', icon: ICONS.home, label: 'בית', r: '/' },
             { to: '#/gifts', icon: ICONS.gift, label: 'כל המתנות', r: '/gifts' },
+            { to: '#/top', icon: ICONS.heart, label: 'הרצויים ביותר', r: '/top' },
             { to: '#/budget', icon: ICONS.tag, label: 'לפי תקציב', r: '/budget' },
             { to: '#/how', icon: ICONS.bag, label: 'איך קונים', r: '/how' },
         ];
@@ -62,7 +65,7 @@
         }
         return '<div class="gift-card" data-n="' + it.n + '">' +
             '<div class="gift-row"><span class="num">' + it.n + '.</span>' + photo +
-            '<div><div class="name">' + esc(it.name) + '</div><div class="sub">' + esc(it.store) + ' · ' + esc(it.category) + '</div></div>' +
+            '<div><div class="name">' + esc(it.name) + (it.top ? '<span class="top-badge" title="מהרצויים ביותר">' + ICONS.heartFill + '</span>' : '') + '</div><div class="sub">' + esc(it.store) + ' · ' + esc(it.category) + '</div></div>' +
             '<span class="price">' + esc(it.price) + '</span></div>' +
             '<div class="item-actions">' +
             '<button class="item-btn" data-toggle="details" aria-expanded="false">פירוט המוצר <span class="chev" aria-hidden="true">⌄</span></button>' +
@@ -106,6 +109,7 @@
             '<nav class="home-nav" aria-label="דפי האתר">' +
             '<a href="#/gifts" class="home-card">' + ICONS.gift + '<span>כל המתנות</span><small>הרשימה המלאה, עם סינון לפי קטגוריה וחנות</small></a>' +
             '<a href="#/budget" class="home-card">' + ICONS.tag + '<span>לפי תקציב</span><small>אותן מתנות, מחולקות לפי מחיר</small></a>' +
+            '<a href="#/top" class="home-card">' + ICONS.heart + '<span>הרצויים ביותר</span><small>המתנות שהכי בא לי לקבל</small></a>' +
             '<a href="#/how" class="home-card">' + ICONS.bag + '<span>איך קונים</span><small>הסבר קצר למי שרוצה לקנות מתנה</small></a>' +
             '</nav>' +
             '<p class="closing">המחירים מעודכנים לתאריך שמצוין בפירוט של כל פריט.</p>' +
@@ -138,6 +142,20 @@
             '<button class="switch-name" data-switch-name>כניסה בשם אחר</button>' +
             '</div>' + navHtml('/budget');
         return h;
+    }
+
+
+    function topPage() {
+        var list = items.filter(function (it) { return it.top; });
+        var body = list.length
+            ? list.map(giftCardHtml).join('')
+            : '<p class="closing">עוד לא סומנו מתנות בלב. ירדן מסמנת בלב את המתנות שהכי בא לה, והן מופיעות כאן.</p>';
+        return '<div class="page">' +
+            headerHtml('הרצויים ביותר', list.length + ' פריטים', 'אלו המתנות שהכי בא לי לקבל. סימנתי אותן בלב.') +
+            body +
+            '<p class="closing">הסימון מתעדכן מעת לעת. שאר המתנות נמצאות בעמוד ״כל המתנות״.</p>' +
+            '<button class="switch-name" data-switch-name>כניסה בשם אחר</button>' +
+            '</div>' + navHtml('/top');
     }
 
     function howPage() {
@@ -191,7 +209,7 @@
 
     function currentRoute() {
         var h = location.hash.replace(/^#/, '');
-        return (h === '/gifts' || h === '/budget' || h === '/how') ? h : '/';
+        return (h === '/gifts' || h === '/budget' || h === '/how' || h === '/top') ? h : '/';
     }
 
     function route() {
@@ -200,6 +218,7 @@
         if (r === '/gifts') app.innerHTML = giftsPage();
         else if (r === '/budget') app.innerHTML = budgetPage();
         else if (r === '/how') app.innerHTML = howPage();
+        else if (r === '/top') app.innerHTML = topPage();
         else app.innerHTML = homePage();
         window.scrollTo(0, 0);
     }

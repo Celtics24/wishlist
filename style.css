@@ -90,3 +90,12 @@ body { background: #fdeef2; font-family: -apple-system, BlinkMacSystemFont, "Seg
 
 /* Owner page + long unbroken text safety */
 .gift-card .name, .gift-card .sub, .item-details, .notes, .site-header h1 { overflow-wrap: anywhere; }
+
+/* הרצויים ביותר */
+.top-badge { display: inline-flex; vertical-align: -3px; margin-inline-start: 7px; color: #b4577a; }
+.top-badge svg { width: 16px; height: 16px; display: block; }
+.heart-btn svg { flex: none; }
+.heart-btn.on { background: #fdeef4; border-color: #b4577a; color: #b4577a; }
+@media (max-width: 420px) {
+  .nav-item { font-size: 11px; }
+}

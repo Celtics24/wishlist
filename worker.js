@@ -25,7 +25,7 @@ const ALLOWED_ORIGIN = 'https://celtics24.github.io';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
 const MAX_FAILS = 10;
 const LOCK_MS = 15 * 60 * 1000; // 15 min
-const PUBLIC_FIELDS = ['n', 'name', 'detail', 'price', 'ils', 'photo', 'url', 'category', 'store'];
+const PUBLIC_FIELDS = ['n', 'name', 'detail', 'price', 'ils', 'photo', 'url', 'category', 'store', 'top'];
 
 function corsHeaders(origin) {
   const h = {
