@@ -1,0 +1,7 @@
+name = "wishlist"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[[kv_namespaces]]
+binding = "GIFTS"
+id = "90a92ec9caba451fbaf2fa54efeab264"
