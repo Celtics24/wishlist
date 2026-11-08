@@ -1,10 +1,22 @@
 // Wishlist Worker — isolated backend for the wishlist site.
-// Data: KV namespace binding GIFTS (single key "gifts" = full list JSON).
+// Data:
+//   KV namespace binding GIFTS (single key "gifts" = full list JSON) - read cache.
+//   Durable Object binding CLAIMS (class WishlistStore, one instance) - authoritative
+//   store and the ONLY writer of "gifts". All mutations (guest claims and owner
+//   list PUT) go through it, so claim exclusivity is atomic: the DO is
+//   single-threaded and every handler touches transactional storage, which
+//   serializes concurrent requests. KV is written through on every mutation
+//   so public and owner reads stay fast and DO-free.
 // Secret (set via dashboard/API, NEVER in GitHub):
 //   SESSION_SECRET  = random 32+ byte hex, signs session tokens (HMAC-SHA-256)
 //
 // Routes:
-//   GET  /api/gifts            public gift list (public fields only)
+//   GET  /api/gifts            public gift list (public fields only, incl. claimedBy)
+//   POST /api/gifts/claim      {n, name} -> guest claims one item (409 if taken)
+//   POST /api/gifts/unclaim    {n, name} -> guest releases own claim (403 if name mismatch)
+//   Note: claims are hidden in the owner area - /api/owner/list strips claimedBy
+//   and the owner PUT handler re-attaches stored claims (owner mode can't show
+//   or change them; this is display hiding, not secrecy from the site itself).
 //   POST /api/owner/login      {name} -> {token}  (rate limited)
 //   GET  /api/owner/list       auth: full list incl. private fields
 //   PUT  /api/owner/list       auth: replace full list (validated)
@@ -25,7 +37,7 @@ const ALLOWED_ORIGIN = 'https://celtics24.github.io';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
 const MAX_FAILS = 10;
 const LOCK_MS = 15 * 60 * 1000; // 15 min
-const PUBLIC_FIELDS = ['n', 'name', 'detail', 'price', 'ils', 'photo', 'url', 'category', 'store', 'top'];
+const PUBLIC_FIELDS = ['n', 'name', 'detail', 'price', 'ils', 'photo', 'url', 'category', 'store', 'top', 'claimedBy'];
 
 function corsHeaders(origin) {
   const h = {
@@ -136,6 +148,98 @@ function validList(data) {
   return data.items.every(it => it && typeof it.name === 'string' && it.name.length > 0 && it.name.length <= 300);
 }
 
+async function storeCall(env, msg, origin) {
+  try {
+    const stub = env.CLAIMS.get(env.CLAIMS.idFromName('wishlist'));
+    const res = await stub.fetch('https://store/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(msg),
+    });
+    const text = await res.text();
+    return new Response(text, {
+      status: res.status,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders(origin), ...securityHeaders() },
+    });
+  } catch (e) {
+    return json({ error: 'server error' }, 500, origin);
+  }
+}
+
+// Authoritative, single-instance store. All mutations to the gift list go
+// through here. The DO runtime is single-threaded per instance and storage
+// operations serialize concurrent requests (input gates), so two guests can
+// never claim the same item at once: each handler re-reads transactional
+// storage before deciding.
+export class WishlistStore {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    this.data = null;
+    state.blockConcurrencyWhile(async () => {
+      let d = await state.storage.get('gifts');
+      if (!d) {
+        // First run after deploy: seed from the KV copy.
+        d = (await env.GIFTS.get('gifts', 'json')) || { items: [] };
+        await state.storage.put('gifts', d);
+      }
+      this.data = d;
+    });
+  }
+
+  async save() {
+    this.data.updated = new Date().toISOString();
+    await this.state.storage.put('gifts', this.data);
+    await this.env.GIFTS.put('gifts', JSON.stringify(this.data));
+  }
+
+  async fetch(request) {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: 'bad json' }, 400, ''); }
+    // Re-read storage at the start of every mutation: this storage read is
+    // what serializes concurrent requests, so decisions below always see the
+    // latest committed state.
+    this.data = (await this.state.storage.get('gifts')) || this.data || { items: [] };
+    const items = this.data.items || [];
+
+    if (body.action === 'claim') {
+      const it = items.find(i => String(i.n) === String(body.n));
+      if (!it) return json({ error: 'not found' }, 404, '');
+      if (it.claimedBy) {
+        if (normalizeName(it.claimedBy) === normalizeName(body.name)) return json({ ok: true, claimedBy: it.claimedBy }, 200, '');
+        return json({ error: 'taken' }, 409, '');
+      }
+      it.claimedBy = body.name;
+      await this.save();
+      return json({ ok: true, claimedBy: body.name }, 200, '');
+    }
+
+    if (body.action === 'unclaim') {
+      const it = items.find(i => String(i.n) === String(body.n));
+      if (!it || !it.claimedBy) return json({ ok: true }, 200, '');
+      if (normalizeName(it.claimedBy) !== normalizeName(body.name)) return json({ error: 'not yours' }, 403, '');
+      delete it.claimedBy;
+      await this.save();
+      return json({ ok: true }, 200, '');
+    }
+
+    if (body.action === 'putList') {
+      const claims = new Map();
+      for (const it of items) if (it && it.claimedBy !== undefined) claims.set(String(it.n), it.claimedBy);
+      for (const it of body.list.items) {
+        delete it.claimedBy;
+        const c = claims.get(String(it.n));
+        if (c !== undefined) it.claimedBy = c;
+      }
+      this.data = { items: body.list.items };
+      await this.save();
+      return json({ ok: true, updated: this.data.updated }, 200, '');
+    }
+
+    return json({ error: 'bad action' }, 400, '');
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -170,6 +274,26 @@ export default {
         return json({ token: await makeToken(env.SESSION_SECRET) }, 200, origin);
       }
 
+      if (path === '/api/gifts/claim' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'bad json' }, 400, origin); }
+        const name = typeof body.name === 'string' ? body.name.normalize('NFC').trim().replace(/\s+/g, ' ') : '';
+        if (!name || name.length > 60) return json({ error: 'bad name' }, 400, origin);
+        const n = String(body.n);
+        if (!n || n === 'undefined' || n.length > 20) return json({ error: 'bad item' }, 400, origin);
+        return storeCall(env, { action: 'claim', n, name }, origin);
+      }
+
+      if (path === '/api/gifts/unclaim' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'bad json' }, 400, origin); }
+        const name = typeof body.name === 'string' ? body.name.normalize('NFC').trim().replace(/\s+/g, ' ') : '';
+        if (!name || name.length > 60) return json({ error: 'bad name' }, 400, origin);
+        const n = String(body.n);
+        if (!n || n === 'undefined' || n.length > 20) return json({ error: 'bad item' }, 400, origin);
+        return storeCall(env, { action: 'unclaim', n, name }, origin);
+      }
+
       if (path.startsWith('/api/owner/')) {
         const auth = request.headers.get('Authorization') || '';
         const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
@@ -177,15 +301,17 @@ export default {
 
         if (path === '/api/owner/list' && request.method === 'GET') {
           const data = (await env.GIFTS.get('gifts', 'json')) || { items: [] };
-          return json(data, 200, origin);
+          // Hide guest claims from the owner entirely (surprise protection).
+          const items = (data.items || []).map(it => { const o = { ...it }; delete o.claimedBy; return o; });
+          return json({ ...data, items }, 200, origin);
         }
         if (path === '/api/owner/list' && request.method === 'PUT') {
           let body;
           try { body = await request.json(); } catch { return json({ error: 'bad json' }, 400, origin); }
           if (!validList(body)) return json({ error: 'invalid list' }, 400, origin);
-          body.updated = new Date().toISOString();
-          await env.GIFTS.put('gifts', JSON.stringify(body));
-          return json({ ok: true, updated: body.updated }, 200, origin);
+          // The Durable Object re-attaches stored claims (owner edits can never
+          // add/change/remove them) and serializes the write against claims.
+          return storeCall(env, { action: 'putList', list: { items: body.items } }, origin);
         }
         if (path === '/api/owner/profile' && request.method === 'GET') {
           const profile = (await env.GIFTS.get('profile', 'json')) || { ownerNote: '' };

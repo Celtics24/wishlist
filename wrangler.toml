@@ -5,3 +5,12 @@ compatibility_date = "2026-11-01"
 [[kv_namespaces]]
 binding = "GIFTS"
 id = "90a92ec9caba451fbaf2fa54efeab264"
+
+[[durable_objects.bindings]]
+name = "CLAIMS"
+class_name = "WishlistStore"
+
+# SQLite backend: required for Workers Free plan DO support.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WishlistStore"]

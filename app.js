@@ -5,6 +5,8 @@
 
     var PROFILES = { 'ירדן': 'ירדן', 'yarden': 'ירדן' };
 
+    var API = 'https://wishlist.y0546367987.workers.dev';
+
     // ils = approximate shekel value for budget grouping only (£1 ≈ ₪4.26, checked 7.11). Displayed prices stay in the store's currency.
     var items = [];
 
@@ -26,16 +28,21 @@
     };
 
     var LS_KEY = 'wishlist-visitor.v1';
+    var GUEST_KEY = 'wishlist-guest.v1'; // the guest's own name, used for claims
 
     function normalize(name) { return name.trim().replace(/\s+/g, ' ').toLowerCase(); }
     function lookup(name) { return PROFILES[normalize(name)] || null; }
     function getVisitor() { try { return localStorage.getItem(LS_KEY) || ''; } catch (e) { return ''; } }
+    function getGuest() { try { return localStorage.getItem(GUEST_KEY) || ''; } catch (e) { return ''; } }
+    function setGuest(v) { try { if (v) localStorage.setItem(GUEST_KEY, v); } catch (e) {} }
     function setVisitor(v) { try { if (v) localStorage.setItem(LS_KEY, v); else localStorage.removeItem(LS_KEY); } catch (e) {} }
     function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
     var app = document.getElementById('app');
     var filter = { kind: 'all', value: '' };
     var drawerOpen = false;
+    var claimOpenFor = null; // item n whose claim form is open
+    var claimError = null;   // { n, msg }
 
     function navHtml(route) {
         var items_ = [
@@ -56,6 +63,91 @@
             (intro ? '<p class="intro">' + esc(intro) + '</p>' : '') + '</header>';
     }
 
+    function claimRowHtml(it) {
+        var guest = getGuest();
+        var err = (claimError && String(claimError.n) === String(it.n)) ? '<p class="claim-error" role="alert">' + esc(claimError.msg) + '</p>' : '';
+        if (it.claimedBy) {
+            if (guest && normalize(it.claimedBy) === normalize(guest)) {
+                return '<div class="claim-row mine"><span class="claim-state">שמרתם את המתנה הזאת ✓</span>' +
+                    '<button class="claim-cancel" data-unclaim="' + it.n + '">ביטול</button></div>' + err;
+            }
+            return '<div class="claim-row taken"><span class="claim-state">' + esc(it.claimedBy) + ' קונה את זה ✓</span></div>' + err;
+        }
+        if (claimOpenFor === String(it.n)) {
+            return '<div class="claim-row claim-form">' +
+                '<input class="gate-input claim-input" data-for="' + it.n + '" type="text" placeholder="השם שלכם" aria-label="השם שלכם" autocomplete="off" maxlength="60" value="' + esc(guest).replace(/"/g, '&quot;') + '">' +
+                '<button class="gate-submit claim-go" data-claim="' + it.n + '">שמירה</button>' +
+                '<button class="claim-cancel" data-claim-cancel-form aria-label="ביטול">×</button></div>' + err;
+        }
+        return '<div class="claim-row"><button class="item-btn claim-btn" data-claim-open="' + it.n + '">אני קונה את זה</button></div>' + err;
+    }
+
+    function findItem(n) {
+        for (var i = 0; i < items.length; i++) if (String(items[i].n) === String(n)) return items[i];
+        return null;
+    }
+
+    function refreshItems() {
+        fetch(API + '/api/gifts', { headers: { 'X-Wishlist-Client': '1' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) { items = (data && data.items) || []; route(); })
+            .catch(function () { route(); });
+    }
+
+    function doClaim(n) {
+        var input = app.querySelector('.claim-input[data-for="' + n + '"]');
+        var name = input ? input.value.trim().replace(/\s+/g, ' ') : '';
+        if (!name) {
+            claimError = { n: n, msg: 'כתבו את השם שלכם כדי לשמור' };
+            route();
+            var inp = app.querySelector('.claim-input');
+            if (inp) inp.focus();
+            return;
+        }
+        claimError = null;
+        fetch(API + '/api/gifts/claim', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Wishlist-Client': '1' },
+            body: JSON.stringify({ n: Number(n), name: name })
+        }).then(function (r) { return r.json().then(function (d) { return { status: r.status, body: d }; }); })
+            .then(function (res) {
+                if (res.status === 200) {
+                    setGuest(name);
+                    var it = findItem(n);
+                    if (it) it.claimedBy = res.body.claimedBy || name;
+                    claimOpenFor = null;
+                    route();
+                } else if (res.status === 409) {
+                    claimOpenFor = null;
+                    claimError = { n: n, msg: 'מישהו אחר כבר הספיק לשמור את המתנה הזאת' };
+                    refreshItems();
+                } else {
+                    claimError = { n: n, msg: 'שגיאה, נסו שוב' };
+                    route();
+                }
+            })
+            .catch(function () { claimError = { n: n, msg: 'שגיאת רשת, נסו שוב' }; route(); });
+    }
+
+    function doUnclaim(n) {
+        var name = getGuest();
+        if (!name) return;
+        fetch(API + '/api/gifts/unclaim', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Wishlist-Client': '1' },
+            body: JSON.stringify({ n: Number(n), name: name })
+        }).then(function (r) {
+            if (r.status === 200) {
+                var it = findItem(n);
+                if (it) delete it.claimedBy;
+                route();
+            } else {
+                refreshItems();
+            }
+        })
+            .catch(function () { route(); });
+    }
+
     function giftCardHtml(it) {
         var photo = it.photo ? '<img src="' + it.photo + '" alt="' + esc(it.name) + '" loading="lazy">' : '<div class="no-photo" aria-hidden="true"></div>';
         var links = '<div class="item-link"><a href="' + it.url + '" target="_blank" rel="noopener">' + (it.secondUrl ? 'לסט Sleepy Girl + Pretzel' : 'לפריט באתר') + '</a></div>';
@@ -67,6 +159,7 @@
             '<div class="gift-row"><span class="num">' + it.n + '.</span>' + photo +
             '<div><div class="name">' + esc(it.name) + (it.top ? '<span class="top-badge" title="מהרצויים ביותר">' + ICONS.heartFill + '</span>' : '') + '</div><div class="sub">' + esc(it.store) + ' · ' + esc(it.category) + '</div></div>' +
             '<span class="price">' + esc(it.price) + '</span></div>' +
+            claimRowHtml(it) +
             '<div class="item-actions">' +
             '<button class="item-btn" data-toggle="details" aria-expanded="false">פירוט המוצר <span class="chev" aria-hidden="true">⌄</span></button>' +
             '<button class="item-btn" data-toggle="links" aria-expanded="false">קישור למוצר <span class="chev" aria-hidden="true">⌄</span></button>' +
@@ -161,15 +254,16 @@
     function howPage() {
         return '<div class="page">' +
             headerHtml('איך קונים', 'הסבר קצר', 'רוצים לקנות לי מתנה? זה פשוט.') +
-            '<div class="group-label big">שלושה צעדים</div>' +
+            '<div class="group-label big">ארבעה צעדים</div>' +
             '<ol class="steps">' +
             '<li>בוחרים מתנה בעמוד ״כל המתנות״ או ״לפי תקציב״.</li>' +
+            '<li>מסמנים ״אני קונה את זה״ וכותבים את השם, כדי שכולם יראו שהמתנה כבר נתפסה.</li>' +
             '<li>לוחצים על ״קישור למוצר״ מתחת למתנה, ועוברים לאתר החנות.</li>' +
             '<li>קונים באתר החנות, כמו כל קנייה רגילה.</li>' +
             '</ol>' +
             '<div class="group-label big">טוב לדעת</div>' +
             '<ul class="notes">' +
-            '<li>הקנייה מתבצעת רק באתר החנות. כאן אין תשלום והרשימה לא שומרת מה נקנה.</li>' +
+            '<li>הקנייה מתבצעת רק באתר החנות. כאן אין תשלום, והשמירה רק מסמנת לאחרים שמתכוונים לקנות - היא לא קנייה בפועל.</li>' +
             '<li>המחירים מעודכנים לתאריך שמצוין בפירוט של כל פריט, ויכולים להשתנות.</li>' +
             '<li>חמש מתנות מאתר Sephora UK, המחיר שלהן בפאונד (£) והמשלוח מבריטניה.</li>' +
             '<li>בחלק מהפריטים עוד לא נבחרו אפשרויות כמו צבע, מידה או גוון - זה כתוב ב״פירוט המוצר״. במקרה של ספק, אפשר לשאול אותי.</li>' +
@@ -226,9 +320,20 @@
     // Event delegation: toggles, drawer, filters, switch-name.
     app.addEventListener('click', function (e) {
         var t = e.target;
-        var btn = t.closest ? t.closest('[data-toggle],[data-open-drawer],[data-close-drawer],[data-filter-kind],[data-switch-name]') : null;
+        var btn = t.closest ? t.closest('[data-toggle],[data-open-drawer],[data-close-drawer],[data-filter-kind],[data-switch-name],[data-claim-open],[data-claim],[data-unclaim],[data-claim-cancel-form]') : null;
         if (!btn) return;
         if (btn.hasAttribute('data-switch-name')) { setVisitor(''); renderGate(); return; }
+        if (btn.hasAttribute('data-claim-open')) {
+            claimOpenFor = btn.getAttribute('data-claim-open');
+            claimError = null;
+            route();
+            var inp = app.querySelector('.claim-input');
+            if (inp) inp.focus();
+            return;
+        }
+        if (btn.hasAttribute('data-claim-cancel-form')) { claimOpenFor = null; claimError = null; route(); return; }
+        if (btn.hasAttribute('data-claim')) { doClaim(btn.getAttribute('data-claim')); return; }
+        if (btn.hasAttribute('data-unclaim')) { doUnclaim(btn.getAttribute('data-unclaim')); return; }
         if (btn.hasAttribute('data-open-drawer')) { drawerOpen = true; route(); return; }
         if (btn.hasAttribute('data-close-drawer')) { drawerOpen = false; route(); return; }
         if (btn.hasAttribute('data-filter-kind')) {
@@ -246,8 +351,15 @@
         }
     });
 
+    app.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && e.target && e.target.classList && e.target.classList.contains('claim-input')) {
+            e.preventDefault();
+            doClaim(e.target.getAttribute('data-for'));
+        }
+    });
+
     window.addEventListener('hashchange', function () { filter = { kind: 'all', value: '' }; drawerOpen = false; route(); });
-    fetch('https://wishlist.y0546367987.workers.dev/api/gifts', { headers: { 'X-Wishlist-Client': '1' } })
+    fetch(API + '/api/gifts', { headers: { 'X-Wishlist-Client': '1' } })
         .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
         .then(function (data) { items = (data && data.items) || []; route(); })
         .catch(function () {

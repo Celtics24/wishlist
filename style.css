@@ -99,3 +99,12 @@ body { background: #fdeef2; font-family: -apple-system, BlinkMacSystemFont, "Seg
 @media (max-width: 420px) {
   .nav-item { font-size: 11px; }
 }
+
+/* שמירת מתנה מראש (claim) */
+.claim-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.claim-state { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border: 1px solid #f2c9d8; border-radius: 12px; background: #fdeef4; color: #7a3a52; font-size: 14.5px; font-weight: 600; padding: 0 12px; }
+.claim-row.mine .claim-state { background: #eef7f1; border-color: #bfe0cd; color: #4d8a68; }
+.claim-cancel { flex: none; border: 0; background: none; color: #c99cae; font-size: 13px; font-family: inherit; cursor: pointer; text-decoration: underline; padding: 4px; }
+.claim-form .claim-input { flex: 1; min-height: 44px; }
+.claim-form .claim-go { min-height: 44px; flex: none; }
+.claim-error { margin: 6px 2px 0; font-size: 13px; color: #a33; }
