@@ -87,3 +87,6 @@ body { background: #fdeef2; font-family: -apple-system, BlinkMacSystemFont, "Seg
   .page { padding-top: 28px; }
   .site-header h1 { font-size: 40px; }
 }
+
+/* Owner page + long unbroken text safety */
+.gift-card .name, .gift-card .sub, .item-details, .notes, .site-header h1 { overflow-wrap: anywhere; }
