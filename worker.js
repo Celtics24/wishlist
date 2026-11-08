@@ -1,30 +1,25 @@
 // Wishlist Worker — isolated backend for the wishlist site.
 // Data: KV namespace binding GIFTS (single key "gifts" = full list JSON).
-// Secrets (set via dashboard/wrangler, NEVER in GitHub):
-//   OWNER_PW_HASH   = "<saltHex>:<iterations>:<hashHex>"  PBKDF2-HMAC-SHA-256 of owner password
+// Secret (set via dashboard/API, NEVER in GitHub):
 //   SESSION_SECRET  = random 32+ byte hex, signs session tokens (HMAC-SHA-256)
 //
 // Routes:
 //   GET  /api/gifts            public gift list (public fields only)
-//   POST /api/owner/login      {password} -> {token}  (rate limited)
+//   POST /api/owner/login      {name} -> {token}  (rate limited)
 //   GET  /api/owner/list       auth: full list incl. private fields
 //   PUT  /api/owner/list       auth: replace full list (validated)
 //   PUT  /api/owner/profile    auth: {ownerNote} private profile note
 //   GET  /api/owner/profile    auth
 //
 // Security notes:
+// - Entry to the owner area is by the recipient's first name only, per the
+//   owner's explicit choice (she was told and accepted that anyone who knows
+//   the name can enter). The name is an entry filter, NOT authentication.
 // - No cookies: Authorization: Bearer <token> => classic CSRF not applicable.
 // - CORS allows only https://celtics24.github.io and requires the custom
 //   header X-Wishlist-Client (forces preflight; cross-origin forms cannot set it).
 // - Rate limiting: soft KV per-IP counter (10 fails -> 15 min). KV is
-//   eventually consistent, so this is not a hard lockout; WAF rate-limiting
-//   rules cannot protect a *.workers.dev hostname (they need a proxied zone).
-// - PBKDF2: Cloudflare Workers rejects iteration counts above 100,000
-//   (platform cap, throws NotSupportedError) - 100,000 is the maximum and is
-//   what the hash generator must produce. On Workers Free (10 ms CPU), a login
-//   costs tens of ms of CPU; Cloudflare documents auth workloads at 10-20 ms
-//   and enforces CPU on aggregated metrics, so rare logins pass, but this is
-//   a launch-gate test: measure repeated logins at deploy.
+//   eventually consistent, so this is not a hard lockout guarantee.
 
 const ALLOWED_ORIGIN = 'https://celtics24.github.io';
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
@@ -60,28 +55,12 @@ function json(body, status, origin) {
 
 const te = new TextEncoder();
 
-async function pbkdf2Hex(password, saltHex, iterations) {
-  const key = await crypto.subtle.importKey('raw', te.encode(password), 'PBKDF2', false, ['deriveBits']);
-  const salt = new Uint8Array(saltHex.match(/.{2}/g).map(b => parseInt(b, 16)));
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations }, key, 256);
-  return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// Owner entry names (first name of the wishlist recipient), same set the
+// public gate in app.js accepts. NFC + case-fold so phone keyboards match.
+const OWNER_NAMES = new Set(['\u05d9\u05e8\u05d3\u05df'.normalize('NFC'), 'yarden']);
 
-function timingSafeEqual(a, b) {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
-async function verifyPassword(password, stored) {
-  const parts = (stored || '').split(':');
-  if (parts.length !== 3) return false;
-  const [saltHex, iterStr, expected] = parts;
-  const iterations = parseInt(iterStr, 10);
-  if (!saltHex || !iterations || !expected) return false;
-  const actual = await pbkdf2Hex(password, saltHex, iterations);
-  return timingSafeEqual(actual, expected);
+function normalizeName(name) {
+  return name.normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 async function hmacKey(secretHex) {
@@ -182,10 +161,10 @@ export default {
         if (await rateLimited(env, ip)) return json({ error: 'locked' }, 429, origin);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'bad json' }, 400, origin); }
-        const ok = typeof body.password === 'string' && body.password.length <= 200 && await verifyPassword(body.password, env.OWNER_PW_HASH);
+        const ok = typeof body.name === 'string' && body.name.length <= 100 && OWNER_NAMES.has(normalizeName(body.name));
         if (!ok) {
           await recordFail(env, ip);
-          return json({ error: 'wrong password' }, 401, origin);
+          return json({ error: 'wrong name' }, 401, origin);
         }
         await clearFails(env, ip);
         return json({ token: await makeToken(env.SESSION_SECRET) }, 200, origin);

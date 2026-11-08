@@ -34,10 +34,11 @@
     app.textContent = '';
     var card = el('div', 'gate-card');
     card.appendChild(el('h1', 'site-header', 'אזור בעלים'));
-    var label = el('label', 'gate-label', 'סיסמה');
+    var label = el('label', 'gate-label', 'שם');
     var input = el('input', 'gate-input');
-    input.type = 'password';
-    input.autocomplete = 'current-password';
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.placeholder = 'כתבי את שם מי שהרשימה שלו';
     var err = el('p', 'gate-error', '');
     var btn = el('button', 'gate-submit', 'כניסה');
     function go() {
@@ -46,10 +47,10 @@
       fetch(API + '/api/owner/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Wishlist-Client': '1' },
-        body: JSON.stringify({ password: input.value })
+        body: JSON.stringify({ name: input.value })
       }).then(function (r) {
         if (r.status === 429) { err.textContent = 'יותר מדי ניסיונות — נועל ל-15 דקות'; return null; }
-        if (r.status === 401) { err.textContent = 'סיסמה שגויה'; return null; }
+        if (r.status === 401) { err.textContent = 'השם לא מתאים לאזור הבעלים. בדקי את האיות ונסי שוב.'; return null; }
         if (!r.ok) { err.textContent = 'שגיאה, נסי שוב'; return null; }
         return r.json();
       }).then(function (data) {
@@ -59,7 +60,8 @@
     }
     btn.addEventListener('click', go);
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
-    card.appendChild(label); card.appendChild(input); card.appendChild(btn); card.appendChild(err);
+    var hint = el('p', 'closing', 'הכניסה לפי שם בלבד, בלי סיסמה.');
+    card.appendChild(label); card.appendChild(input); card.appendChild(btn); card.appendChild(err); card.appendChild(hint);
     app.appendChild(card);
   }
 
