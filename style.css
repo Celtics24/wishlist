@@ -27,7 +27,8 @@ body { background: #fdeef2; font-family: -apple-system, BlinkMacSystemFont, "Seg
 
 /* Icon navigation */
 .icon-nav { display: flex; background: #ffffff; padding: 6px 8px; }
-.icon-nav.bottom { border-top: 1px solid #f2c9d8; margin-top: 10px; padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+.icon-nav.bottom { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; max-width: 688px; margin: 0 auto; border-top: 1px solid #f2c9d8; padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+#app.wish .page { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 52px; justify-content: center; color: #c99cae; text-decoration: none; border-radius: 14px; font-size: 12px; font-weight: 600; }
 .nav-item svg { display: block; }
 .nav-item.active { color: #b4577a; background: #fdeef4; }
