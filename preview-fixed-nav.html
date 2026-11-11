@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>my wishlist</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+<style>
+/* PREVIEW ONLY: bottom nav fixed to the screen while scrolling */
+.icon-nav.bottom { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; max-width: 688px; margin: 0 auto; }
+.page:has(.icon-nav.bottom) { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+</style>
+</head>
+<body>
+<div id="app" class="wish"></div>
+<script src="app.js"></script>
+</body>
+</html>
